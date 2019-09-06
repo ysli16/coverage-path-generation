@@ -1,0 +1,31 @@
+ADAPTIVE TO DEPTH:
+TSP:
+total length: 4885.443682
+number of turns:818
+algorithm runtime: 584.029371 s
+TSP2:
+total length: 4904.331373
+number of turns:818
+algorithm runtime: 599.519035 s
+GLOBAL:
+total length: 4858.200962
+number of turns:818
+algorithm runtime: 938.162936 s
+CPP:
+total length: 4722.702270
+number of turns:1530
+algorithm runtime: 426.580495 s
+
+NOT ADAPTIVE TO DEPTH
+TSP:
+total length: 5553.673005
+number of turns:668
+algorithm runtime: 411.313725 s
+TSP2:
+total length: 5546.469287
+number of turn:668
+runtime: 415.854646 s
+CPP:
+total length: 5388.473206
+number of turns:1320
+algorithm runtime: 247.908668 s
