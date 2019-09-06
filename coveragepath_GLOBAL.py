@@ -906,7 +906,7 @@ iscell=[False,True]
 '''
 
 #lake Mascoma
-obsnum=4
+obsnum=2
 temppt=[(8.9,2.5),(9.1,2.4),(9.25,2.5),(9,2.7)]
 temppt=np.array(temppt)
 temppt=temppt*ratio
@@ -926,7 +926,7 @@ obstacles.append(temppolygon)
 inner=np.array([[9.3,2.55],[9.4,2.4],[9.6,2.4],[9.6,2.5],[9.5,2.6]])
 inner=inner*ratio
 allinnerpt.extend(inner)
-
+'''
 temppt=[(7,2.4),(7.15,0.9),(8.45,0.5),(9.2,0.5),(10.15,0.9),(10.15,1.7),(8.7,1.9),(7.25,2.6)]
 temppt=np.array(temppt)
 temppt=temppt*ratio
@@ -949,7 +949,10 @@ allinnerpt.extend(inner)
 obsleft=np.array([8.9,9.3,7,11.75])*ratio
 obsright=np.array([9.25,9.6,10.15,12.75])*ratio
 iscell=[False,False,True,True]
-
+'''
+obsleft=np.array([8.9,9.3])*ratio
+obsright=np.array([9.25,9.6,])*ratio
+iscell=[False,False]
 '''
 for i in range(obsnum):
 
@@ -1173,4 +1176,4 @@ turnnum=len(waypoints)-1
 print "totaltime: %f" %totaltime
 print "number of turn:%f" %turnnum
 print "runtime: %f s" %computetime
-fig.savefig('GLOBALadaptive.svg', format='svg', dpi=1200)
+fig.savefig('GLOBALnoadaptive.svg', format='svg', dpi=1200)
