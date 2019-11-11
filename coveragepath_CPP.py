@@ -297,7 +297,7 @@ def formperpenicularlines(xpos):
     return cutlines
 
 #find coverage path inside a convex polygon, return two paths, start from leftup and leftdown
-def createallwaypoint(rboundary,inputwidth):
+def createallwaypoint(rboundary,inputwidth,height):
     bounds=rboundary.bounds
     cutnum=float(math.ceil(round((round(bounds[2],6)-round(bounds[0],6))/inputwidth,6)))
     width=(round(bounds[2],6)-round(bounds[0],6))/cutnum 
@@ -356,13 +356,13 @@ def createallwaypoint(rboundary,inputwidth):
             upmax=uppoints[upindex[3]].y #ymax
             downmin=downpoints[downindex[1]].y
             downmax=downpoints[downindex[3]].y
-            if(upmax-downmin<=width):
+            if(upmax-downmin<=height):
                 waypoint.append(Point(pointpos[i],(upmax+downmin)/2))
             else:
-                if(upmax-upmin<=width/2):
-                    waypoint.append(Point(pointpos[i],upmax-width/2))
+                if(upmax-upmin<=height/2):
+                    waypoint.append(Point(pointpos[i],upmax-height/2))
                 else:
-                    cutpt=Point(pointpos[i],upmax-width/2)
+                    cutpt=Point(pointpos[i],upmax-height/2)
                     cut=yaxis.perpendicular_line(cutpt)
                     crosspoint=polygon.intersection(cut)
                     if(crosspoint[0].x<crosspoint[1].x):
@@ -372,23 +372,23 @@ def createallwaypoint(rboundary,inputwidth):
                         leftcross=crosspoint[1]
                         rightcross=crosspoint[0]
                     if(leftcross.x<=pointpos[i] and rightcross.x>=pointpos[i]):
-                        waypoint.append(Point(pointpos[i],upmax-width/2))
+                        waypoint.append(Point(pointpos[i],upmax-height/2))
                     elif(leftcross.x>pointpos[i]):
                         waypoint.append(leftcross)
-                        if(upmin-downmax<=width):
+                        if(upmin-downmax<=height):
                             waypoint.append(Point(pointpos[i],(upmin+downmax)/2))
                         else:
-                            waypoint.append(Point(pointpos[i],upmin-width/2))                                
+                            waypoint.append(Point(pointpos[i],upmin-height/2))                                
                     else:
                         waypoint.append(rightcross)
-                        if(upmin-downmax<=width):
+                        if(upmin-downmax<=height):
                             waypoint.append(Point(pointpos[i],(upmin+downmax)/2))
                         else:
-                            waypoint.append(Point(pointpos[i],upmin-width/2)) 
-                if(downmax-downmin<=width/2):
-                    waypoint.append(Point(pointpos[i],downmin+width/2))
+                            waypoint.append(Point(pointpos[i],upmin-height/2)) 
+                if(downmax-downmin<=height/2):
+                    waypoint.append(Point(pointpos[i],downmin+height/2))
                 else:
-                    cutpt=Point(pointpos[i],downmin+width/2)
+                    cutpt=Point(pointpos[i],downmin+height/2)
                     cut=yaxis.perpendicular_line(cutpt)
                     crosspoint=polygon.intersection(cut)
                     if(crosspoint[0].x<crosspoint[1].x):
@@ -398,18 +398,18 @@ def createallwaypoint(rboundary,inputwidth):
                         leftcross=crosspoint[1]
                         rightcross=crosspoint[0]
                     if(leftcross.x<=pointpos[i] and rightcross.x>=pointpos[i]):
-                        waypoint.append(Point(pointpos[i],downmin+width/2))
+                        waypoint.append(Point(pointpos[i],downmin+height/2))
                     elif(leftcross.x>pointpos[i]):
-                        if(upmin-downmax<=width):
+                        if(upmin-downmax<=height):
                             waypoint.append(Point(pointpos[i],(upmin+downmax)/2))
                         else:
-                            waypoint.append(Point(pointpos[i],downmax+width/2))
+                            waypoint.append(Point(pointpos[i],downmax+height/2))
                         waypoint.append(leftcross)
                     else:
-                        if(upmin-downmax<=width):
+                        if(upmin-downmax<=height):
                             waypoint.append(Point(pointpos[i],(upmin+downmax)/2))
                         else:
-                            waypoint.append(Point(pointpos[i],downmax+width/2)) 
+                            waypoint.append(Point(pointpos[i],downmax+height/2)) 
                         waypoint.append(rightcross)
         elif(len(lines)==1):
             index=findbound(vertices)
@@ -420,12 +420,12 @@ def createallwaypoint(rboundary,inputwidth):
             xmin=vertices[index[0]].x
             xmax=vertices[index[2]].x
             if(line.contains(vertices[leftindex])):#cut line at left
-                if(ymax-ymin<=width):
+                if(ymax-ymin<=height):
                     waypoint.append(Point(xmax-width/2,(ymin+ymax)/2))
                 else:
-                    upcutpt=Point(pointpos[i],ymax-width/2)
+                    upcutpt=Point(pointpos[i],ymax-height/2)
                     upcut=yaxis.perpendicular_line(upcutpt)
-                    downcutpt=Point(pointpos[i],ymin+width/2)
+                    downcutpt=Point(pointpos[i],ymin+height/2)
                     downcut=yaxis.perpendicular_line(downcutpt)
                     rightcutpt=Point(xmax-width/2,0)
                     rightcut=xaxis.perpendicular_line(rightcutpt)
@@ -445,10 +445,10 @@ def createallwaypoint(rboundary,inputwidth):
                         else:
                             uppt=crosspoint[1]
                             downpt=crosspoint[0]
-                        if((uppt.y-downpt.y)<=width):
+                        if((uppt.y-downpt.y)<=height):
                             waypoint.append(Segment(uppt,downpt).midpoint)
                         else:
-                            waypoint.append(Point(uppt.x,uppt.y-width/2))
+                            waypoint.append(Point(uppt.x,uppt.y-height/2))
                     downcrosspoint=rightcut.intersection(downcut)
                     if(polygon.encloses_point(downcrosspoint[0])):
                         waypoint.append(downcrosspoint[0])
@@ -460,22 +460,22 @@ def createallwaypoint(rboundary,inputwidth):
                         else:
                             uppt=crosspoint[1]
                             downpt=crosspoint[0]
-                        if((uppt.y-downpt.y)<=width):
+                        if((uppt.y-downpt.y)<=height):
                             waypoint.append(Segment(uppt,downpt).midpoint)
                         else:
-                            waypoint.append(Point(downpt.x,downpt.y+width/2))
+                            waypoint.append(Point(downpt.x,downpt.y+height/2))
                         crosspoint=polygon.intersection(downcut)
                         if(crosspoint[0].x<crosspoint[1].x):
                             waypoint.append(crosspoint[0])
                         else:
                             waypoint.append(crosspoint[1])                                 
             else:#cut line at right
-                if(ymax-ymin<=width):
+                if(ymax-ymin<=height):
                     waypoint=[Point(xmin+width/2,(ymin+ymax)/2)]
                 else:
-                    upcutpt=Point(pointpos[i],ymax-width/2)
+                    upcutpt=Point(pointpos[i],ymax-height/2)
                     upcut=yaxis.perpendicular_line(upcutpt)
-                    downcutpt=Point(pointpos[i],ymin+width/2)
+                    downcutpt=Point(pointpos[i],ymin+height/2)
                     downcut=yaxis.perpendicular_line(downcutpt)
                     leftcutpt=Point(xmin+width/2,0)
                     leftcut=xaxis.perpendicular_line(leftcutpt)
@@ -495,10 +495,10 @@ def createallwaypoint(rboundary,inputwidth):
                         else:
                             uppt=crosspoint[1]
                             downpt=crosspoint[0]
-                        if((uppt.y-downpt.y)<=width):
+                        if((uppt.y-downpt.y)<=height):
                             waypoint.append(Segment(uppt,downpt).midpoint)
                         else:
-                            waypoint.append(Point(uppt.x,uppt.y-width/2))
+                            waypoint.append(Point(uppt.x,uppt.y-height/2))
                     downcrosspoint=leftcut.intersection(downcut)
                     if(polygon.encloses_point(downcrosspoint[0])):
                         waypoint.append(downcrosspoint[0])
@@ -510,10 +510,10 @@ def createallwaypoint(rboundary,inputwidth):
                         else:
                             uppt=crosspoint[1]
                             downpt=crosspoint[0]
-                        if((uppt.y-downpt.y)<=width):
+                        if((uppt.y-downpt.y)<=height):
                             waypoint.append(Segment(uppt,downpt).midpoint)
                         else:
-                            waypoint.append(Point(downpt.x,downpt.y+width/2))
+                            waypoint.append(Point(downpt.x,downpt.y+height/2))
                         crosspoint=polygon.intersection(downcut)
                         if(crosspoint[0].x>crosspoint[1].x):
                             waypoint.append(crosspoint[0])
@@ -524,7 +524,7 @@ def createallwaypoint(rboundary,inputwidth):
             if(bound[3]-bound[1]<width):
                 waypoint=[Point(pointpos[i],(bound[1]+bound[3])/2)]
             else:
-                waypoint=[Point(pointpos[i],bound[3]-width/2),Point(pointpos[i],bound[1]+width/2)]
+                waypoint=[Point(pointpos[i],bound[3]-height/2),Point(pointpos[i],bound[1]+height/2)]
         i=i+1
         if(i%2==1):
             waypoint.reverse()
@@ -534,10 +534,10 @@ def createallwaypoint(rboundary,inputwidth):
     return waypoints1,waypoints2
 
 #find the path exploring the cell that has least distance traveling from entrance point to exit point   
-def singlearearoute(cell,inputwidth,Entrance):
+def singlearearoute(cell,inputwidth,height,Entrance):
     mintime=float('inf')
     optimalpath=[]
-    waypoint1,waypoint2=createallwaypoint(cell,inputwidth)
+    waypoint1,waypoint2=createallwaypoint(cell,inputwidth,height)
     time=timeconsume(waypoint1,Entrance)
     if(time<mintime):
         mintime=time
@@ -601,26 +601,9 @@ def plotboundary(ax,boundary):
     ax.plot(vertice[:,0],vertice[:,1],linewidth=2,color='black',linestyle='-')
     
 #plot waypoints
-def plotline(ax,rwaypoints,width):
+def plotline(ax,rwaypoints):
     point=pointtoarray(rwaypoints) 
     ax.plot(point[:,0],point[:,1],linewidth=1,color='g')
-    width=0.1
-    for i in range(len(rwaypoints)-1):
-        x=[]
-        y=[]
-        if(rwaypoints[i].x==rwaypoints[i+1].x and rwaypoints[i].y==rwaypoints[i+1].y):
-            continue
-        else:
-            line=Line(rwaypoints[i],rwaypoints[i+1])
-            diracp=line.direction.unit
-            diracn=diracp.rotate(math.pi/2)
-            rectpt1=rwaypoints[i].translate((diracn.x-diracp.x)*width/2,(diracn.y-diracp.y)*width/2)
-            rectpt2=rwaypoints[i+1].translate((diracn.x+diracp.x)*width/2,(diracn.y+diracp.y)*width/2)
-            rectpt3=rwaypoints[i+1].translate((diracp.x-diracn.x)*width/2,(diracp.y-diracn.y)*width/2)
-            rectpt4=rwaypoints[i].translate((-diracp.x-diracn.x)*width/2,(-diracp.y-diracn.y)*width/2)
-            x.extend([rectpt1.x,rectpt2.x,rectpt3.x,rectpt4.x])
-            y.extend([rectpt1.y,rectpt2.y,rectpt3.y,rectpt4.y])
-            ax.fill(x,y,'w',alpha=1)
 
 #sort the vertices according to coordinate x    
 def sortvertice(vertices):
@@ -743,7 +726,7 @@ if(boundary.area<0):
     boundary=Polygon(*vertices)
 '''
 
-ratio=10
+ratio=1000/2.4
 #lake Mascoma
 bpt=[(0,0.4),(0.55,0.1),(2,0.1),(2.93,0.65),(3.75,0.6),
         (4.05,0.3),(4.55,0.4),(5.25,0.1),(7.1,0.5),(9.3,0.2),
@@ -1020,12 +1003,13 @@ else:
     criticalpoints.append(cross[0].midpoint)
 
 #add deeper areas
-width=np.ones(len(cells))*0.5
+width=np.ones(len(cells))*16.8
+height=np.ones(len(cells))*12.5
 for i in range(obsnum):
     if(iscell[i]):
         cells.append(obstacles[i])
-        width=np.append(width,2.4)
-
+        width=np.append(width,84)
+        height=np.append(height,62.5)
 #merge critical points that have same x coordinate
 formerxpos=criticalpoints[0].x
 count=1
@@ -1136,6 +1120,7 @@ for c in copiedcell:
     cells.insert(c+j,cell1)
     cells.insert(c+j,cell2)
     width=np.insert(width,c+j,width[c+j])
+    height=np.insert(height,c+j,height[c+j])
     j=j+1
 
 #generate coverage path
@@ -1145,7 +1130,7 @@ velocity=1
 turnpanalty=10
 visitededge=[0]
 currentnode=0
-cellwaypoint=singlearearoute(cells[0],width[0],criticalpoints[0])
+cellwaypoint=singlearearoute(cells[0],width[0],height[0],criticalpoints[0])
 waypoints.extend(cellwaypoint)
 #greedy algorithm to find the sequence
 while(len(visitededge)<len(cells)):
@@ -1176,7 +1161,7 @@ while(len(visitededge)<len(cells)):
         mindistance.append(mindist)
     nextedge=edgeoptions[mindistance.index(min(mindistance))]
         
-    cellwaypoint=singlearearoute(cells[nextedge],width[nextedge],waypoints[-1])
+    cellwaypoint=singlearearoute(cells[nextedge],width[nextedge],height[nextedge],waypoints[-1])
     waypoints.extend(cellwaypoint)
     visitededge.append(nextedge)
     
@@ -1188,7 +1173,7 @@ plotboundary(ax,boundary)
 for i in range(obsnum):
     if not(iscell[i]):
         plotboundary(ax,obstacles[i])
-plotline(ax,waypoints,width[0])
+plotline(ax,waypoints)
 waypoints.append(waypoints[0])
 totaltime=timeconsume(waypoints,waypoints[0])
 turnnum=len(waypoints)-1
@@ -1196,4 +1181,4 @@ turnnum=len(waypoints)-1
 print "totaltime: %f" %totaltime
 print "number of turn:%f" %turnnum
 print "runtime: %f s" %computetime
-fig.savefig('CPPadaptive.svg', format='svg', dpi=1200)
+fig.savefig('CPPadaptive_final.svg', format='svg', dpi=1200)
