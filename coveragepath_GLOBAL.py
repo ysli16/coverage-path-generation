@@ -200,6 +200,83 @@ def minuspolygon(polygon,obs,pt):
     verticesp[indexp:indexp]=iter(verticeso[indexo:len(verticeso)])
     polygon=Polygon(*verticesp)
     return polygon
+def mergecell(cell0,cell1,index0,index1):
+    vertice0=cell0.vertices
+    vertice1=cell1.vertices
+    if(index0==0):
+        vertice=vertice0[0:len(vertice0)-1]
+    else:
+        vertice=vertice0[index0:len(cell0.vertices)]+vertice0[0:index0-1]
+    if(index1==0):
+        vertice+=vertice1[0:len(vertice1)-1]
+    else:
+        vertice+=vertice1[index1:len(cell1.vertices)]+vertice1[0:index1-1]
+    return Polygon(*vertice)
+def addtoTSPmodel(newcell,nodes):
+    node=newcell.centroid
+    nodes.append([node.x,node.y])
+def solveTSPLP(points):
+    # Create variables
+    m = grb.Model()
+    vars = {}
+    for i in range(num):
+       for j in range(i+1):
+           vars[i,j] = m.addVar(obj=TSPdistance(points[i],points[j]), vtype=grb.GRB.BINARY,
+                              name='e'+str(i)+'_'+str(j))
+           vars[j,i] = vars[i,j]
+       m.update()
+    # Add degree-2 constraint, and forbid loops   
+    for i in range(num):
+      m.addConstr(grb.quicksum(vars[i,j] for j in range(num)) == 2)
+      vars[i,i].ub = 0
+    m.update()
+    m._vars = vars
+    m.params.LazyConstraints = 1
+    m.optimize(TSPsubtourelim)
+    return m
+def TSPdistance(point1,point2):
+    distance=math.sqrt(pow(point1[0]-point2[0],2)+pow(point1[1]-point2[1],2))
+    return distance
+def TSPsubtourelim(model, where):
+  if where == grb.GRB.callback.MIPSOL:
+    selected = []
+    # make a list of edges selected in the solution
+    for i in range(num):
+      sol = model.cbGetSolution([model._vars[i,j] for j in range(num)])
+      selected += [(i,j) for j in range(num) if sol[j] > 0.5]
+    # find the shortest cycle in the selected edge list
+    tour = TSPsubtour(selected)
+    if len(tour) < num:
+      # add a subtour elimination constraint
+      expr = 0
+      for i in range(len(tour)):
+        for j in range(i+1, len(tour)):
+          expr += model._vars[tour[i], tour[j]]
+      model.cbLazy(expr <= len(tour)-1)
+
+# Given a list of edges, finds the shortest subtour     
+def TSPsubtour(edges):
+  visited = [False]*num
+  cycles = []
+  lengths = []
+  selected = [[] for i in range(num)]
+  for x,y in edges:
+    selected[x].append(y)
+  while True:
+    current = visited.index(False)
+    thiscycle = [current]
+    while True:
+      visited[current] = True
+      neighbors = [x for x in selected[current] if not visited[x]]
+      if len(neighbors) == 0:
+        break
+      current = neighbors[0]
+      thiscycle.append(current)
+    cycles.append(thiscycle)
+    lengths.append(len(thiscycle))
+    if sum(lengths) == num:
+      break
+  return cycles[lengths.index(min(lengths))]
 '''
 LP model input:
 vpoints=[
@@ -227,11 +304,15 @@ for i in vpoints:
 '''
 
 #compute data required by the LP model
+#vpoints:each row records adjacent vertices of one cell
+#index:the rank of current cell in cells
+#pathindex:record the rank of the path in list possiblepaths responding to the minimal cost of current combination of vertices
 def addtomodel(newcell,possiblepaths,cells,vpoints,innercost,pathindex):
     vpoints.append([])
     innercost.append([])
     pathindex.append([])
     index=len(vpoints)-1
+    '''
     for newvertice in newcell.vertices:
         i=0
         for cell in cells:   
@@ -241,6 +322,9 @@ def addtomodel(newcell,possiblepaths,cells,vpoints,innercost,pathindex):
                     vpoints[-1].append(newvertice)
                     break
             i=i+1
+    '''
+    for path in possiblepaths:
+        vpoints[-1].append(Point(path[0]))
     cost=np.zeros((len(vpoints[-1]),len(vpoints[-1])))
     pindex=np.zeros((len(vpoints[-1]),len(vpoints[-1])))
     for i in range(len(vpoints[-1])):
@@ -263,36 +347,15 @@ def addtomodel(newcell,possiblepaths,cells,vpoints,innercost,pathindex):
     innercost[-1].extend(cost.tolist())
     pathindex[-1].extend(pindex.tolist())
 
-#find the index of cell corresponding to the index of node
-def findcno(index):
-    count=0
-    for i in range(len(vnum)):
-        count=count+vnum[i]
-        if(count>index):
-            return i
-
-#find index of vertice that belongs to input cell
-def findvno(cellno,index):
-    count=0
-    for i in range(cellno):
-        count=count+vnum[i]
-    return index-count
-
-#find the range of indexs of nodes that belongs to input cell
-def findcindex(cellno):
-    count=0
-    for i in range(cellno):
-        count=count+vnum[i]
-    return [count,count+vnum[cellno]-1]
 
 #compute distance between two nodes. 
 #consider Euclidean distance of two nodes belong to different cells
 #consider path time cost if two nodes belong to the same cell
 def distance(indexi,indexj):
-    cellno1=findcno(indexi)
-    cellno2=findcno(indexj)
-    verticeno1=findvno(cellno1,indexi)
-    verticeno2=findvno(cellno2,indexj)
+    cellno1=indexi/4
+    cellno2=indexj/4
+    verticeno1=indexi%4
+    verticeno2=indexj%4
     if not(cellno1==cellno2):
         distance=math.sqrt(pow(vpoints[cellno1][verticeno1][0]-vpoints[cellno2][verticeno2][0],2)+pow(vpoints[cellno1][verticeno1][1]-vpoints[cellno2][verticeno2][1],2))
     else:
@@ -349,10 +412,10 @@ def printsolution(m,pathvar):
         for j in range(totalnum):
             for i in range(j):
                 if (round(pathvar[(i,j)].X,5)==1):
-                    cellno1=findcno(i)
-                    cellno2=findcno(j)
-                    verticeno1=findvno(cellno1,i)
-                    verticeno2=findvno(cellno2,j)
+                    cellno1=i/4
+                    cellno2=j/4
+                    verticeno1=i%4
+                    verticeno2=j%4
                     if(cellno1==cellno2):
                         print('explore cell %d, from vertice %d to %d' %(cellno1,verticeno1,verticeno2))
                     else:
@@ -361,7 +424,7 @@ def printsolution(m,pathvar):
         print('No feasible solution')
         
 #formulate and solve LP model
-def solveLP(points):
+def solveLP(points,startvar):
     # Create variables
     m = grb.Model()
     vars = {}
@@ -369,6 +432,8 @@ def solveLP(points):
        for j in range(i+1):           
            vars[i,j] = m.addVar(obj=distance(i,j), vtype=grb.GRB.BINARY,
                               name='e'+str(i)+'_'+str(j))
+           if(startvar):
+               vars[i,j].start=0
            vars[j,i] = vars[i,j]
        m.update()
     for i in range(totalnum):     
@@ -377,30 +442,54 @@ def solveLP(points):
     # Add degree-2 constraint 
     for y in range(totalnum):
         vars[y]=m.addVar(vtype=grb.GRB.BINARY,name='y')
+        if(startvar):
+            vars[y].start=0
     m.update()
     for i in range(totalnum):
-        m.addConstr((vars[i]==1)>>(grb.quicksum(vars[i,j] 
-                    for j in range(totalnum)
-                    )==0))
-        
         m.addConstr((vars[i]==0)>>(grb.quicksum(vars[i,j] 
                     for j in range(totalnum)
-                    )==2))
-    #all egdes inside each cell must be visited at least once
-    for cellno in range(len(vnum)): 
-        indexrange=findcindex(cellno)
+                    )==0),name='unselected '+str(i))
+        
+        m.addConstr((vars[i]==1)>>(grb.quicksum(vars[i,j] 
+                    for j in range(totalnum)
+                    )==2),name='selected '+str(i))
+    for k in range(len(vnum)): 
+        indexrange=[4*k,4*k+3]
         m.addConstr(grb.quicksum(vars[i,j] 
                     for i in range(indexrange[0],indexrange[1]+1) 
-                    for j in range(indexrange[0],indexrange[1]+1))>=1)
+                    for j in range(indexrange[0],indexrange[1]+1))==2,name='inside '+str(k))
     m.update()
-    m._vars = vars
+    
+    if(startvar):
+        visited=[]
+        currentc=0
+        for j in range(num):
+            vars[4*j,4*j+1].start=1
+            vars[4*j+1,4*j].start=1
+            vars[4*j].start=1
+            vars[4*j+1].start=1
+            nextc=findnextTSP(startvar,visited,currentc)
+            vars[4*currentc+1,4*nextc].start=1
+            vars[4*nextc,4*currentc+1].start=1
+            currentc=nextc
+            visited.append(currentc)
+
+        m.update() 
+    m._vars = vars           
     m.params.LazyConstraints = 1
-    m.params.MIPFocus=3
+    m.params.MIPFocus=0
     m.params.MIPgap=0.01
-    m.params.ImproveStartTime=450
     m.optimize(subtourelim)
     return m
-
+def findnextTSP(pathvar,visited,current):
+    for p in pathvar:
+        if (round(pathvar[p].X,5)==1):
+            if(p[0]==current):
+                if not(p[1] in visited):
+                    return p[1]
+            elif(p[1]==current):
+                if not(p[0] in visited):
+                    return p[0]
 #given a sequence of points, return the indexs of left,bottom,right,top extremities in a list
 def findbound(vertices):
     leftmost=float('inf')
@@ -683,34 +772,28 @@ def roundpolygon(polygon):
 #find the rotation angle that minimize the width of the cell  
 def findoptimalangle(cell):
     minwidth=float('inf')
-    for angle in range(0,180,10):
-        angle=float(angle)
-        rcell=cell.rotate(angle/180*math.pi)
-        bound=rcell.bounds
-        width=(bound[2]-bound[0])
-        if(width<minwidth):
-            minwidth=width
-            optimalangle=angle
-    optimalangle=int(optimalangle)
-    for angle in range(optimalangle-9,optimalangle+10,1):
-        angle=float(angle)
-        rcell=cell.rotate(angle/180*math.pi)
-        bound=rcell.bounds
-        width=(bound[2]-bound[0])
-        if(width<minwidth):
-            minwidth=width
-            optimalangle=angle
-    return optimalangle
+    if(cell.is_convex()):
+        for side in cell.sides:
+            angle=math.atan(side.slope)
+            rcell=cell.rotate(math.pi/2-angle)
+            bound=rcell.bounds
+            width=(bound[2]-bound[0])
+            if(width<minwidth):
+                minwidth=width
+                optimalangle=math.pi/2-angle
+        return optimalangle
+    else:
+        return 0
 
 #store all possible paths
 def possiblepath(cell,inputwidth,height):
     angle=float(findoptimalangle(cell))
     possiblepaths=[]
-    rcell=cell.rotate(angle/180*math.pi)
+    rcell=cell.rotate(angle)
     rcell=roundpolygon(rcell)
     waypoint1,waypoint2=createallwaypoint(rcell,inputwidth,height)
     for i in range(len(waypoint1)):
-        waypoint1[i]=waypoint1[i].rotate(-angle/180*math.pi)
+        waypoint1[i]=waypoint1[i].rotate(-angle)
     possiblepaths.append(waypoint1)   
     
     rvwaypoint=waypoint1[:]
@@ -718,7 +801,7 @@ def possiblepath(cell,inputwidth,height):
     possiblepaths.append(rvwaypoint)
         
     for i in range(len(waypoint2)):
-        waypoint2[i]=waypoint2[i].rotate(-angle/180*math.pi)
+        waypoint2[i]=waypoint2[i].rotate(-angle)
     possiblepaths.append(waypoint2)
     
     rvwaypoint=waypoint2[:]
@@ -816,7 +899,7 @@ if(boundary.area<0):
     vertices.reverse()
     boundary=Polygon(*vertices)
 '''
-'''
+
 ratio=1000/2.4
 #lake Mascoma
 bpt=[(0,0.4),(0.55,0.1),(2,0.1),(2.93,0.65),(3.75,0.6),
@@ -830,14 +913,17 @@ bpt=np.array(bpt)
 bpt=bpt*ratio
 boundary=map(Point,bpt)
 boundary=Polygon(*boundary)
+
 '''
 #simplified Lake Mascoma
 boundary=Polygon((0,1),(4,0),(6.5,0.5),(8,1.8),(4.6,3.5),(3,3),(2.8,1),(1,1.5))
+'''
 #obsnum=int(input("Enter the number of boundary points:"))
 obstacles=[]
 allinnerpt=[]
 obsleft=[]
 obsright=[]
+
 '''
 #sample1,2
 obsnum=1
@@ -891,7 +977,7 @@ obsleft=[1,5]
 obsright=[4,7]
 iscell=[False,True]
 '''
-'''
+
 #lake Mascoma
 obsnum=4
 temppt=[(8.9,2.5),(9.1,2.4),(9.25,2.5),(9,2.7)]
@@ -900,9 +986,7 @@ temppt=temppt*ratio
 temppolygon=map(Point,temppt)
 temppolygon=Polygon(*temppolygon)
 obstacles.append(temppolygon)
-inner=np.array([[8.9,2.5],[9.1,2.4],[9.25,2.5],[9,2.7]])
-inner=inner*ratio
-allinnerpt.extend(inner)
+allinnerpt.extend(temppt)
 
 temppt=[(9.3,2.55),(9.4,2.4),(9.6,2.4),(9.6,2.5),(9.5,2.6)]
 temppt=np.array(temppt)
@@ -910,9 +994,7 @@ temppt=temppt*ratio
 temppolygon=map(Point,temppt)
 temppolygon=Polygon(*temppolygon)
 obstacles.append(temppolygon)
-inner=np.array([[9.3,2.55],[9.4,2.4],[9.6,2.4],[9.6,2.5],[9.5,2.6]])
-inner=inner*ratio
-allinnerpt.extend(inner)
+allinnerpt.extend(temppt)
 
 temppt=[(7,2.4),(7.15,0.9),(8.45,0.5),(9.2,0.5),(10.15,0.9),(10.15,1.7),(8.7,1.9),(7.25,2.6)]
 temppt=np.array(temppt)
@@ -920,9 +1002,7 @@ temppt=temppt*ratio
 temppolygon=map(Point,temppt)
 temppolygon=Polygon(*temppolygon)
 obstacles.append(temppolygon)
-inner=np.array([[7,2.4],[7.15,0.9],[8.45,0.5],[9.2,0.5],[10.15,0.9],[10.15,1.7],[8.7,1.9],[7.25,2.6]])
-inner=inner*ratio
-allinnerpt.extend(inner)
+allinnerpt.extend(temppt)
 
 temppt=[(11.75,1.5),(12.4,1),(12.75,1.25),(12.45,2),(11.9,1.85)]
 temppt=np.array(temppt)
@@ -930,20 +1010,18 @@ temppt=temppt*ratio
 temppolygon=map(Point,temppt)
 temppolygon=Polygon(*temppolygon)
 obstacles.append(temppolygon)
-inner=np.array([[11.75,1.5],[12.4,1],[12.75,1.25],[12.45,2],[11.9,1.85]])
-inner=inner*ratio
-allinnerpt.extend(inner)
+allinnerpt.extend(temppt)
 obsleft=np.array([8.9,9.3,7,11.75])*ratio
 obsright=np.array([9.25,9.6,10.15,12.75])*ratio
 iscell=[False,False,True,True]
-'''
+
 '''
 obsleft=np.array([8.9,9.3])*ratio
 obsright=np.array([9.25,9.6,])*ratio
 iscell=[False,False]
 '''
 #simplified Lake Mascoma
-
+'''
 obsnum=2
 temppolygon=Polygon((3.5,1.5),(4,0.8),(5,1.5),(5,2.2))
 obstacles.append(temppolygon)
@@ -954,7 +1032,7 @@ allinnerpt.extend([[3.8,3.1],[3.8,2.7],[4.6,2.7],[4.6,3]])
 obsleft=[3.5,3.8]
 obsright=[5,4.6]
 iscell=[True,False]
-
+'''
 '''
 for i in range(obsnum):
 
@@ -990,9 +1068,7 @@ cells=[]
 vpoints=[]
 innercost=[]
 pathindex=[]
-fig=plt.figure()
-ax = fig.add_subplot(1,1,1)
-ax.set_aspect('equal', 'box')
+
 #area decomposition
 for pt in allinnerpt:
     isleft=False
@@ -1058,6 +1134,7 @@ for pt in allinnerpt:
                 if(obs.contains(Point(pt))):
                     break
             remain=minuspolygon(remain,obs,pt)
+            '''
     if not (isleft or isright):
         for obs in obstacles:
             if(obs.contains(Point(pt))):
@@ -1069,98 +1146,163 @@ for pt in allinnerpt:
             else:
                 seg=Segment(crosspt[index-1],crosspt[index])
             cell,remain=splitpolygon(remain,seg)
-            cells.append(cell)   
+            cells.append(cell)  
+            '''
 
 cells.append(remain)
-width=np.ones(len(cells))*0.1
-height=np.ones(len(cells))*0.1
+width=np.ones(len(cells))*70
+height=np.ones(len(cells))*70
 #add deeper area
 for i in range(obsnum):
     if(iscell[i]):
         cells.append(obstacles[i])
-        width=np.append(width,0.2)
-        height=np.append(height,0.2)
+        width=np.append(width,100)
+        height=np.append(height,100)
 #split concave cell into convex cells 
 cindex=0
 count=0 
 convexcells=list(cells) 
 for cell in cells:
-    cutpt=[]
+    cutpt1=[]
+    cutpt2=[]
     if not(cell.is_convex()):
         for vertice in cell.vertices:
             if(cell.angles[vertice]>math.pi):
-                cutpt.append(vertice)
-        pts=pointtoarray(cutpt)
+                cutpt1.append(vertice)
+            else:
+                cutpt2.append(vertice)
+        if(len(cutpt1)>len(cutpt2)):
+            pts=pointtoarray(cutpt2)
+        else:
+            pts=pointtoarray(cutpt1)
         pts = pts[pts[:,0].argsort()]
-        for pt in pts:
-            cut=yaxis.parallel_line(Point(pt))
-            cross=convexcells[cindex+count].intersection(cut)
-            if(len(cross)==2):
-                cell1,cell2=splitpolygon(convexcells[cindex+count],cut)    
-                convexcells.remove(convexcells[cindex+count])
-                convexcells.insert(cindex+count,cell2)
-                convexcells.insert(cindex+count,cell1) 
-                width=np.insert(width,cindex+count,width[cindex+count])
-                height=np.insert(height,cindex+count,height[cindex+count])
-                count=count+1
-            elif(len(cross)==3):
-                seg1=Segment(cross[0],cross[1])
-                cell1,cell2=splitpolygon(convexcells[cindex+count],seg1)    
-                convexcells.remove(convexcells[cindex+count])
-                convexcells.insert(cindex+count,cell2)
-                convexcells.insert(cindex+count,cell1) 
-                width=np.insert(width,cindex+count,width[cindex+count])
-                height=np.insert(height,cindex+count,height[cindex+count])
-                count=count+1
-                seg2=Segment(cross[1],cross[2])
-                cell1,cell2=splitpolygon(convexcells[cindex+count],seg2)    
-                convexcells.remove(convexcells[cindex+count])
-                convexcells.insert(cindex+count,cell2)
-                convexcells.insert(cindex+count,cell1)  
-                width=np.insert(width,cindex+count,width[cindex+count])
-                height=np.insert(height,cindex+count,height[cindex+count])
-                count=count+1
+        i=0
+        for i in range(len(pts)+1):
+            if(i==len(pts)):
+                if(i>1):
+                    cell0=convexcells[cindex+count-1]
+                    cell1=convexcells[cindex+count]
+                    if((findoptimalangle(cell0)==0) and (findoptimalangle(cell1)==0)):
+                        seg=cell1.intersection(cell0)
+                        index1=findpoint(cell1.vertices,seg[0].p1)
+                        index0=findpoint(cell0.vertices,seg[0].p2)
+                        if not (index1==-1 or index0==-1):
+                            mergedcell=mergecell(cell0,cell1,index0,index1)
+                            convexcells.remove(convexcells[cindex+count-1])
+                            convexcells.insert(cindex+count-1,mergedcell)
+                            convexcells.remove(convexcells[cindex+count])
+                            count=count-1
+                else: 
+                    continue
+            else:
+                pt=pts[i]
+                cut=yaxis.parallel_line(Point(pt))
+                cross=convexcells[cindex+count].intersection(cut)
+                if(len(cross)==2):
+                    cell1,cell2=splitpolygon(convexcells[cindex+count],cut)
+                    if(len(pts)==1):
+                        if not((findoptimalangle(cell1)==0) and (findoptimalangle(cell2)==0)):
+                            convexcells.remove(convexcells[cindex+count])
+                            convexcells.insert(cindex+count,cell2)
+                            convexcells.insert(cindex+count,cell1) 
+                            width=np.insert(width,cindex+count,width[cindex+count])
+                            height=np.insert(height,cindex+count,height[cindex+count]) 
+                            count=count+1
+                    else:
+                        if(i>0):
+                            cell0=convexcells[cindex+count-1]
+                            seg=cell1.intersection(cell0)
+                            if(len(seg)):
+                                if(isinstance(seg[0],Segment)):
+                                    if ((findoptimalangle(cell1)==0) and (findoptimalangle(cell0)==0)):                        
+                                        index1=findpoint(cell1.vertices,seg[0].p1)
+                                        index0=findpoint(cell0.vertices,seg[0].p2)
+                                        if not (index1==-1 or index0==-1):
+                                            mergedcell=mergecell(cell0,cell1,index0,index1)
+                                            convexcells.remove(convexcells[cindex+count-1])
+                                            convexcells.insert(cindex+count-1,mergedcell)
+                                            convexcells.remove(convexcells[cindex+count])
+                                            convexcells.insert(cindex+count,cell2)                                           
+                                            continue
+                        convexcells.remove(convexcells[cindex+count])
+                        convexcells.insert(cindex+count,cell2)
+                        convexcells.insert(cindex+count,cell1) 
+                        width=np.insert(width,cindex+count,width[cindex+count])
+                        height=np.insert(height,cindex+count,height[cindex+count]) 
+                        count=count+1
+                elif(len(cross)==3):
+                    seg1=Segment(cross[0],cross[1])
+                    cell1,cell2=splitpolygon(convexcells[cindex+count],seg1)    
+                    convexcells.remove(convexcells[cindex+count])
+                    convexcells.insert(cindex+count,cell2)
+                    convexcells.insert(cindex+count,cell1) 
+                    width=np.insert(width,cindex+count,width[cindex+count])
+                    height=np.insert(height,cindex+count,height[cindex+count])
+                    count=count+1
+                    seg2=Segment(cross[1],cross[2])
+                    cell1,cell2=splitpolygon(convexcells[cindex+count],seg2)    
+                    convexcells.remove(convexcells[cindex+count])
+                    convexcells.insert(cindex+count,cell2)
+                    convexcells.insert(cindex+count,cell1)  
+                    width=np.insert(width,cindex+count,width[cindex+count])
+                    height=np.insert(height,cindex+count,height[cindex+count])
+                    count=count+1
     cindex=cindex+1
+
 i=0
 velocity=1
 turnpanalty=10
-#get all possible coverage path inside each cell
-#compute data required by the LP model
+
+smartstart=True
+if(smartstart): 
+    nodes=[]
+    for cell in convexcells:
+        addtoTSPmodel(cell,nodes)   
+    num=len(nodes)
+    tspmodel=solveTSPLP(nodes)    
+    #get all possible coverage path inside each cell
+    #compute data required by the LP model
 allpossiblepath=[]
 for cell in convexcells:
     path=possiblepath(cell,width[i],height[i])
     allpossiblepath.append(path)
     addtomodel(cell,path,convexcells,vpoints,innercost,pathindex)
     i=i+1
-
 totalnum=0
 vnum=[]
 for i in vpoints:
     totalnum=totalnum+len(i)
     vnum.append(len(i))
 #solve model
-m=solveLP(vpoints)
+if(smartstart):
+    startvar=tspmodel._vars
+    m=solveLP(vpoints,startvar)
+else:
+    m=solveLP(vpoints,None)
 
 printsolution(m,m._vars)
 #generate whole path
 waypoints=[]
-current=0
+for i in range(4):
+    for j in range(i):
+        if(round(m._vars[(i,j)].X,5)==1):
+            current=j
 visited=[current]
 next1=findnext(m._vars,visited,current)
-if(findcno(current)==findcno(next1)):
-    cellno=findcno(current)
-    verticeno1=findvno(cellno,current)
-    verticeno2=findvno(cellno,next1)
+if(current/4==next1/4):
+    cellno=current/4
+    verticeno1=current%4
+    verticeno2=next1%4
     cellwaypoint=allpossiblepath[cellno][int(pathindex[cellno][verticeno1][verticeno2])]
     waypoints.extend(cellwaypoint)
 current=next1
 visited.append(current)
 next1=findnext(m._vars,visited,current)
 while(next1):    
-    if(findcno(current)==findcno(next1)):
-        cellno=findcno(current)
-        verticeno1=findvno(cellno,current)
-        verticeno2=findvno(cellno,next1)
+    if(current/4==next1/4):
+        cellno=current/4
+        verticeno1=current%4
+        verticeno2=next1%4
         cellwaypoint=allpossiblepath[cellno][int(pathindex[cellno][verticeno1][verticeno2])]
         waypoints.extend(cellwaypoint)
     current=next1
@@ -1170,12 +1312,16 @@ while(next1):
 computetime=time.time()-starttime
 
 #plot result
+fig=plt.figure()
+ax = fig.add_subplot(1,1,1)
+ax.set_aspect('equal', 'box')
 for cell in convexcells:
     plotpolygon(ax,cell)
 plotboundary(ax,boundary)
 for i in range(obsnum):
     if not(iscell[i]):
         plotboundary(ax,obstacles[i])
+        
 plotline(ax,waypoints)
 waypoints.append(waypoints[0])
 totaltime=timeconsume(waypoints,waypoints[0],waypoints[-1])
@@ -1184,4 +1330,3 @@ turnnum=len(waypoints)-1
 print "totaltime: %f" %totaltime
 print "number of turn:%f" %turnnum
 print "runtime: %f s" %computetime
-fig.savefig('GLOBALadaptive.svg', format='svg', dpi=1200)
