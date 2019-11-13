@@ -1,4 +1,4 @@
-o#!/usr/bin/env python2
+#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
 Created on Thu Aug 22 11:50:19 2019
@@ -20,7 +20,7 @@ features:
 """
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches.Polygon as poly
+#import matplotlib.patches.Polygon as poly
 import math
 from sympy import Point, Line, Polygon,Segment
 import gurobipy as grb
@@ -75,7 +75,7 @@ def formpolygon(coord):
     return vertex
 
 #find all Points that equals to the target
-#return -1 for none, single point or a list of points
+#return -1 for none, single point index or a list of points' indexes
 def findpoint(items,target):
     i=0
     index=[]
@@ -95,7 +95,7 @@ def findpoint(items,target):
 #split input polygon into two parts by input line
 #return leftpolygon,rightpolygon or uppolygon,downpolygon or original polygon,none(if no intersection)
 def splitpolygon(polygon,line):
-    crosspoint=polygon.intersection(line)
+    crosspoint=polygon.intersection(line)#return points followed by segments(if has any)
     sides=polygon.sides
     vertices=polygon.vertices
     if(len(crosspoint)==2 and isinstance(crosspoint[1],Point)):
@@ -199,13 +199,26 @@ def minuspolygon(polygon,obs,pt):
     polygon=Polygon(*verticesp)
     return polygon
 
+def mergecell(cell0,cell1,index0,index1):
+    vertice0=cell0.vertices
+    vertice1=cell1.vertices
+    if(index0==0):
+        vertice=vertice0[0:len(vertice0)-1]
+    else:
+        vertice=vertice0[index0:len(cell0.vertices)]+vertice0[0:index0-1]
+    if(index1==0):
+        vertice+=vertice1[0:len(vertice1)-1]
+    else:
+        vertice+=vertice1[index1:len(cell1.vertices)]+vertice1[0:index1-1]
+    return Polygon(*vertice)
 '''
 LP model input:
 points=[(0,2),(1,2),(1,1),(2,0.5),(1,3),(2,3.5),(2,0.5),(3,1),(2,3.5),(3,3),(3,2),(4,2)]
 num=12
 '''
 #compute data required by the LP model
-def addtomodel(newcell,nodes,midpoints):
+def addtomodel(newcell,nodes):
+    '''
     bound=findbound(newcell.vertices)
     leftbound=newcell.vertices[bound[0]]
     rightbound=newcell.vertices[bound[2]]
@@ -222,6 +235,7 @@ def addtomodel(newcell,nodes,midpoints):
     else:
         b=rightcross.midpoint    
     midpoints.extend([(a.x,a.y),(b.x,b.y)])
+    '''
     node=newcell.centroid
     nodes.append([node.x,node.y])
     
@@ -586,35 +600,29 @@ def roundpolygon(polygon):
 #find the rotation angle that minimize the width of the cell
 def findoptimalangle(cell):
     minwidth=float('inf')
-    for angle in range(0,180,10):
-        angle=float(angle)
-        rcell=cell.rotate(angle/180*math.pi)
-        bound=rcell.bounds
-        width=(bound[2]-bound[0])
-        if(width<minwidth):
-            minwidth=width
-            optimalangle=angle
-    optimalangle=int(optimalangle)
-    for angle in range(optimalangle-9,optimalangle+10,1):
-        angle=float(angle)
-        rcell=cell.rotate(angle/180*math.pi)
-        bound=rcell.bounds
-        width=(bound[2]-bound[0])
-        if(width<minwidth):
-            minwidth=width
-            optimalangle=angle
-    return optimalangle
+    if(cell.is_convex()):
+        for side in cell.sides:
+            angle=math.atan(side.slope)
+            rcell=cell.rotate(math.pi/2-angle)
+            bound=rcell.bounds
+            width=(bound[2]-bound[0])
+            if(width<minwidth):
+                minwidth=width
+                optimalangle=math.pi/2-angle
+        return optimalangle
+    else:
+        return 0
 
 #find the path exploring the cell that has least distance traveling from entrance point to exit point
 def singlearearoute(cell,inputwidth,height,Entrance,Exit):
     mintime=float('inf')
-    angle=float(findoptimalangle(cell))
+    angle=findoptimalangle(cell)
     optimalpath=[]
     Entrance=Point(Entrance)
     Exit=Point(Exit)
-    rcell=cell.rotate(angle/180*math.pi)
-    rentrance=Entrance.rotate(angle/180*math.pi)
-    rexit=Exit.rotate(angle/180*math.pi)
+    rcell=cell.rotate(angle)
+    rentrance=Entrance.rotate(angle)
+    rexit=Exit.rotate(angle)
     rcell=roundpolygon(rcell)
    
     waypoint1,waypoint2=createallwaypoint(rcell,inputwidth,height)
@@ -643,7 +651,7 @@ def singlearearoute(cell,inputwidth,height,Entrance,Exit):
         optimalpath=rvwaypoint
         
     for i in range(len(optimalpath)):
-        optimalpath[i]=optimalpath[i].rotate(-angle/180*math.pi)
+        optimalpath[i]=optimalpath[i].rotate(-angle)
     
     return optimalpath
 
@@ -756,7 +764,7 @@ boundary=Polygon((0,0),(7,0),(7,6),(0,6))
 '''
 '''
 #sample6
-ratio=1000/2.4
+ratio=1
 bpt=[(0,0),(9,0),(9,5),(0,5)]
 bpt=np.array(bpt)
 bpt=bpt*ratio
@@ -769,7 +777,7 @@ if(boundary.area<0):
     vertices.reverse()
     boundary=Polygon(*vertices)
 '''
-'''
+
 #lake Mascoma
 ratio=1000/2.4
 bpt=[(0,0.4),(0.55,0.1),(2,0.1),(2.93,0.65),(3.75,0.6),
@@ -783,9 +791,11 @@ bpt=np.array(bpt)
 bpt=bpt*ratio
 boundary=map(Point,bpt)
 boundary=Polygon(*boundary)
+
 '''
 #simplified Lake Mascoma
 boundary=Polygon((0,1),(4,0),(6.5,0.5),(8,1.8),(4.6,3.5),(3,3),(2.8,1),(1,1.5))
+'''
 #obsnum=int(input("Enter the number of boundary points:"))
 
 
@@ -842,9 +852,7 @@ temppt=temppt*ratio
 temppolygon=map(Point,temppt)
 temppolygon=Polygon(*temppolygon)
 obstacles.append(temppolygon)
-inner=np.array([[1,3],[2,1],[4,2],[2,3]])
-inner=inner*ratio
-allinnerpt.extend(inner)
+allinnerpt.extend(temppt)
 
 temppt=[(5,1.5),(7,1.5),(7,4),(5,4)]
 temppt=np.array(temppt)
@@ -852,26 +860,22 @@ temppt=temppt*ratio
 temppolygon=map(Point,temppt)
 temppolygon=Polygon(*temppolygon)
 obstacles.append(temppolygon)
-inner=np.array([[5,1.5],[7,1.5],[7,4],[5,4]])
-inner=inner*ratio
-allinnerpt.extend(inner)
+allinnerpt.extend(temppt)
 
 obsleft=np.array([1,5])*ratio
 obsright=np.array([4,7])*ratio
 iscell=[False,True]
 '''
-'''
+
 #lake Mascoma
-obsnum=2
+obsnum=4
 temppt=[(8.9,2.5),(9.1,2.4),(9.25,2.5),(9,2.7)]
 temppt=np.array(temppt)
 temppt=temppt*ratio
 temppolygon=map(Point,temppt)
 temppolygon=Polygon(*temppolygon)
 obstacles.append(temppolygon)
-inner=np.array([[8.9,2.5],[9.1,2.4],[9.25,2.5],[9,2.7]])
-inner=inner*ratio
-allinnerpt.extend(inner)
+allinnerpt.extend(temppt)
 
 temppt=[(9.3,2.55),(9.4,2.4),(9.6,2.4),(9.6,2.5),(9.5,2.6)]
 temppt=np.array(temppt)
@@ -879,9 +883,7 @@ temppt=temppt*ratio
 temppolygon=map(Point,temppt)
 temppolygon=Polygon(*temppolygon)
 obstacles.append(temppolygon)
-inner=np.array([[9.3,2.55],[9.4,2.4],[9.6,2.4],[9.6,2.5],[9.5,2.6]])
-inner=inner*ratio
-allinnerpt.extend(inner)
+allinnerpt.extend(temppt)
 
 temppt=[(7,2.4),(7.15,0.9),(8.45,0.5),(9.2,0.5),(10.15,0.9),(10.15,1.7),(8.7,1.9),(7.25,2.6)]
 temppt=np.array(temppt)
@@ -889,9 +891,7 @@ temppt=temppt*ratio
 temppolygon=map(Point,temppt)
 temppolygon=Polygon(*temppolygon)
 obstacles.append(temppolygon)
-inner=np.array([[7,2.4],[7.15,0.9],[8.45,0.5],[9.2,0.5],[10.15,0.9],[10.15,1.7],[8.7,1.9],[7.25,2.6]])
-inner=inner*ratio
-allinnerpt.extend(inner)
+allinnerpt.extend(temppt)
 
 temppt=[(11.75,1.5),(12.4,1),(12.75,1.25),(12.45,2),(11.9,1.85)]
 temppt=np.array(temppt)
@@ -899,17 +899,16 @@ temppt=temppt*ratio
 temppolygon=map(Point,temppt)
 temppolygon=Polygon(*temppolygon)
 obstacles.append(temppolygon)
-inner=np.array([[11.75,1.5],[12.4,1],[12.75,1.25],[12.45,2],[11.9,1.85]])
-inner=inner*ratio
-allinnerpt.extend(inner)
+allinnerpt.extend(temppt)
 obsleft=np.array([8.9,9.3,7,11.75])*ratio
 obsright=np.array([9.25,9.6,10.15,12.75])*ratio
 iscell=[False,False,True,True]
-'''
+
 '''
 obsleft=np.array([8.9,9.3])*ratio
 obsright=np.array([9.25,9.6,])*ratio
 iscell=[False,False]
+'''
 '''
 #simplified Lake Mascoma
 obsnum=2
@@ -922,6 +921,7 @@ allinnerpt.extend([[3.8,3.1],[3.8,2.7],[4.6,2.7],[4.6,3]])
 obsleft=[3.5,3.8]
 obsright=[5,4.6]
 iscell=[True,False]
+'''
 '''
 for i in range(obsnum):
 
@@ -955,11 +955,8 @@ xaxis=Line((0,0),(1,0))
 yaxis=Line((0,0),(0,1))
 remain=boundary
 cells=[]
-midpoints=[]
 nodes=[]
-fig=plt.figure()
-ax = fig.add_subplot(1,1,1)
-ax.set_aspect('equal', 'box')
+
 
 #area decomposition
 for pt in allinnerpt:
@@ -1026,6 +1023,7 @@ for pt in allinnerpt:
                 if(obs.contains(Point(pt))):
                     break
             remain=minuspolygon(remain,obs,pt)
+    '''
     if not (isleft or isright):
         for obs in obstacles:
             if(obs.contains(Point(pt))):
@@ -1038,59 +1036,111 @@ for pt in allinnerpt:
                 seg=Segment(crosspt[index-1],crosspt[index])
             cell,remain=splitpolygon(remain,seg)
             cells.append(cell)   
+    '''  
 
 cells.append(remain)
 
-width=np.ones(len(cells))*0.1
-height=np.ones(len(cells))*0.1
+width=np.ones(len(cells))*40
+height=np.ones(len(cells))*40
 #add deeper areas
 for i in range(obsnum):
     if(iscell[i]):
         cells.append(obstacles[i])
-        width=np.append(width,0.2)
-        height=np.append(height,0.2)
+        width=np.append(width,80)
+        height=np.append(height,80)
 cindex=0
 count=0 
 #split concave cell into convex cells 
 convexcells=list(cells) 
 for cell in cells:
-    cutpt=[]
+    cutpt1=[]
+    cutpt2=[]
     if not(cell.is_convex()):
         for vertice in cell.vertices:
             if(cell.angles[vertice]>math.pi):
-                cutpt.append(vertice)
-        pts=pointtoarray(cutpt)
+                cutpt1.append(vertice)
+            else:
+                cutpt2.append(vertice)
+        if(len(cutpt1)>len(cutpt2)):
+            pts=pointtoarray(cutpt2)
+        else:
+            pts=pointtoarray(cutpt1)
         pts = pts[pts[:,0].argsort()]
-        for pt in pts:
-            cut=yaxis.parallel_line(Point(pt))
-            cross=convexcells[cindex+count].intersection(cut)
-            if(len(cross)==2):
-                cell1,cell2=splitpolygon(convexcells[cindex+count],cut)    
-                convexcells.remove(convexcells[cindex+count])
-                convexcells.insert(cindex+count,cell2)
-                convexcells.insert(cindex+count,cell1) 
-                width=np.insert(width,cindex+count,width[cindex+count])
-                height=np.insert(height,cindex+count,height[cindex+count]) 
-                count=count+1                         
-            elif(len(cross)==3):
-                seg1=Segment(cross[0],cross[1])
-                cell1,cell2=splitpolygon(convexcells[cindex+count],seg1)    
-                convexcells.remove(convexcells[cindex+count])
-                convexcells.insert(cindex+count,cell2)
-                convexcells.insert(cindex+count,cell1) 
-                width=np.insert(width,cindex+count,width[cindex+count])
-                height=np.insert(height,cindex+count,height[cindex+count]) 
-                count=count+1
-                seg2=Segment(cross[1],cross[2])
-                cell1,cell2=splitpolygon(convexcells[cindex+count],seg2)    
-                convexcells.remove(convexcells[cindex+count])
-                convexcells.insert(cindex+count,cell2)
-                convexcells.insert(cindex+count,cell1)  
-                width=np.insert(width,cindex+count,width[cindex+count])
-                height=np.insert(height,cindex+count,height[cindex+count]) 
-                count=count+1
+        i=0
+        for i in range(len(pts)+1):
+            if(i==len(pts)):
+                if(i>1):
+                    cell0=convexcells[cindex+count-1]
+                    cell1=convexcells[cindex+count]
+                    if((findoptimalangle(cell0)==0) and (findoptimalangle(cell1)==0)):
+                        seg=cell1.intersection(cell0)
+                        index1=findpoint(cell1.vertices,seg[0].p1)
+                        index0=findpoint(cell0.vertices,seg[0].p2)
+                        if not (index1==-1 or index0==-1):
+                            mergedcell=mergecell(cell0,cell1,index0,index1)
+                            convexcells.remove(convexcells[cindex+count-1])
+                            convexcells.insert(cindex+count-1,mergedcell)
+                            convexcells.remove(convexcells[cindex+count])
+                            count=count-1
+                else: 
+                    continue
+            else:
+                pt=pts[i]
+                cut=yaxis.parallel_line(Point(pt))
+                cross=convexcells[cindex+count].intersection(cut)
+                if(len(cross)==2):
+                    cell1,cell2=splitpolygon(convexcells[cindex+count],cut)
+                    if(len(pts)==1):
+                        if not((findoptimalangle(cell1)==0) and (findoptimalangle(cell2)==0)):
+                            convexcells.remove(convexcells[cindex+count])
+                            convexcells.insert(cindex+count,cell2)
+                            convexcells.insert(cindex+count,cell1) 
+                            width=np.insert(width,cindex+count,width[cindex+count])
+                            height=np.insert(height,cindex+count,height[cindex+count]) 
+                            count=count+1
+                    else:
+                        if(i>0):
+                            cell0=convexcells[cindex+count-1]
+                            seg=cell1.intersection(cell0)
+                            if(len(seg)):
+                                if(isinstance(seg[0],Segment)):
+                                    if ((findoptimalangle(cell1)==0) and (findoptimalangle(cell0)==0)):                        
+                                        index1=findpoint(cell1.vertices,seg[0].p1)
+                                        index0=findpoint(cell0.vertices,seg[0].p2)
+                                        if not (index1==-1 or index0==-1):
+                                            mergedcell=mergecell(cell0,cell1,index0,index1)
+                                            convexcells.remove(convexcells[cindex+count-1])
+                                            convexcells.insert(cindex+count-1,mergedcell)
+                                            convexcells.remove(convexcells[cindex+count])
+                                            convexcells.insert(cindex+count,cell2)                                           
+                                            continue
+                        convexcells.remove(convexcells[cindex+count])
+                        convexcells.insert(cindex+count,cell2)
+                        convexcells.insert(cindex+count,cell1) 
+                        width=np.insert(width,cindex+count,width[cindex+count])
+                        height=np.insert(height,cindex+count,height[cindex+count]) 
+                        count=count+1
+                elif(len(cross)==3):
+                    seg1=Segment(cross[0],cross[1])
+                    cell1,cell2=splitpolygon(convexcells[cindex+count],seg1)    
+                    convexcells.remove(convexcells[cindex+count])
+                    convexcells.insert(cindex+count,cell2)
+                    convexcells.insert(cindex+count,cell1) 
+                    width=np.insert(width,cindex+count,width[cindex+count])
+                    height=np.insert(height,cindex+count,height[cindex+count]) 
+                    count=count+1
+                    seg2=Segment(cross[1],cross[2])
+                    cell1,cell2=splitpolygon(convexcells[cindex+count],seg2)    
+                    convexcells.remove(convexcells[cindex+count])
+                    convexcells.insert(cindex+count,cell2)
+                    convexcells.insert(cindex+count,cell1)  
+                    width=np.insert(width,cindex+count,width[cindex+count])
+                    height=np.insert(height,cindex+count,height[cindex+count]) 
+                    count=count+1
     cindex=cindex+1
 convexcells = list(filter(None, convexcells))
+
+
 '''
 #plot result
 for cell in convexcells:
@@ -1103,7 +1153,7 @@ for i in range(obsnum):
 
 #compute data required by the LP model
 for cell in convexcells:
-    addtomodel(cell,nodes,midpoints)   
+    addtomodel(cell,nodes)   
 #solve model
 num=len(nodes)
 m=solveLP(nodes)
@@ -1132,6 +1182,9 @@ while(len(visited)<len(convexcells)):
 computetime=time.time()-starttime
 
 #plot result
+fig=plt.figure()
+ax = fig.add_subplot(1,1,1)
+ax.set_aspect('equal', 'box')
 for cell in convexcells:
     plotpolygon(ax,cell)
 plotboundary(ax,boundary)
