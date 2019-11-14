@@ -1,0 +1,36 @@
+with adaptiveness:
+TSP(no post-merge):
+nodenum:861
+length:258469
+turn:1115
+runtime:419s
+TSP:
+nodenum:351
+length:252090
+turn:1129
+runtime:428s
+GLOBAL(no post-merge, no smartstart):
+nodenum:14364
+length:253217
+turn:1115
+runtime:1946s(1495s)
+GLOBAL(no post-merge):
+nodenum:14364
+length:252815
+turn:1115
+runtime:1314s(839s)
+GLOBAL(no smartstart):
+nodenum:5564
+length:250309
+turn:1129
+runtime:583s(100.8s)
+GLOBAL:
+nodenum:5564
+length:249834
+turn:1129
+runtime:501s(50s)
+without adaptiveness:
+CPP:
+length:250074
+turn:2119
+runtime:859s

@@ -956,7 +956,7 @@ yaxis=Line((0,0),(0,1))
 remain=boundary
 cells=[]
 nodes=[]
-
+postmerge=False
 
 #area decomposition
 for pt in allinnerpt:
@@ -1023,31 +1023,30 @@ for pt in allinnerpt:
                 if(obs.contains(Point(pt))):
                     break
             remain=minuspolygon(remain,obs,pt)
-    '''
-    if not (isleft or isright):
-        for obs in obstacles:
-            if(obs.contains(Point(pt))):
-                break
-        if (obs.angles[Point(pt)]<math.pi):
-            index=findpoint(crosspt,Point(pt))
-            if(index%2==0):
-                seg=Segment(crosspt[index],crosspt[index+1])
-            else:
-                seg=Segment(crosspt[index-1],crosspt[index])
-            cell,remain=splitpolygon(remain,seg)
-            cells.append(cell)   
-    '''  
+    if not (postmerge):        
+        if not (isleft or isright):
+            for obs in obstacles:
+                if(obs.contains(Point(pt))):
+                    break
+            if (obs.angles[Point(pt)]<math.pi):
+                index=findpoint(crosspt,Point(pt))
+                if(index%2==0):
+                    seg=Segment(crosspt[index],crosspt[index+1])
+                else:
+                    seg=Segment(crosspt[index-1],crosspt[index])
+                cell,remain=splitpolygon(remain,seg)
+                cells.append(cell)  
 
 cells.append(remain)
 
-width=np.ones(len(cells))*40
-height=np.ones(len(cells))*40
+width=np.ones(len(cells))*16.8
+height=np.ones(len(cells))*12.5
 #add deeper areas
 for i in range(obsnum):
     if(iscell[i]):
         cells.append(obstacles[i])
-        width=np.append(width,80)
-        height=np.append(height,80)
+        width=np.append(width,84)
+        height=np.append(height,62.5)
 cindex=0
 count=0 
 #split concave cell into convex cells 
@@ -1066,60 +1065,92 @@ for cell in cells:
         else:
             pts=pointtoarray(cutpt1)
         pts = pts[pts[:,0].argsort()]
-        i=0
-        for i in range(len(pts)+1):
-            if(i==len(pts)):
-                if(i>1):
-                    cell0=convexcells[cindex+count-1]
-                    cell1=convexcells[cindex+count]
-                    if((findoptimalangle(cell0)==0) and (findoptimalangle(cell1)==0)):
-                        seg=cell1.intersection(cell0)
-                        index1=findpoint(cell1.vertices,seg[0].p1)
-                        index0=findpoint(cell0.vertices,seg[0].p2)
-                        if not (index1==-1 or index0==-1):
-                            mergedcell=mergecell(cell0,cell1,index0,index1)
-                            convexcells.remove(convexcells[cindex+count-1])
-                            convexcells.insert(cindex+count-1,mergedcell)
-                            convexcells.remove(convexcells[cindex+count])
-                            count=count-1
-                else: 
-                    continue
-            else:
-                pt=pts[i]
-                cut=yaxis.parallel_line(Point(pt))
-                cross=convexcells[cindex+count].intersection(cut)
-                if(len(cross)==2):
-                    cell1,cell2=splitpolygon(convexcells[cindex+count],cut)
-                    if(len(pts)==1):
-                        if not((findoptimalangle(cell1)==0) and (findoptimalangle(cell2)==0)):
+        if(postmerge):
+            i=0
+            for i in range(len(pts)+1):
+                if(i==len(pts)):
+                    if(i>1):
+                        cell0=convexcells[cindex+count-1]
+                        cell1=convexcells[cindex+count]
+                        if((findoptimalangle(cell0)==0) and (findoptimalangle(cell1)==0)):
+                            seg=cell1.intersection(cell0)
+                            index1=findpoint(cell1.vertices,seg[0].p1)
+                            index0=findpoint(cell0.vertices,seg[0].p2)
+                            if not (index1==-1 or index0==-1):
+                                mergedcell=mergecell(cell0,cell1,index0,index1)
+                                convexcells.remove(convexcells[cindex+count-1])
+                                convexcells.insert(cindex+count-1,mergedcell)
+                                convexcells.remove(convexcells[cindex+count])
+                                width=np.delete(width,cindex+count)
+                                height=np.delete(height,cindex+count)
+                                count=count-1
+                    else: 
+                        continue
+                else:
+                    pt=pts[i]
+                    cut=yaxis.parallel_line(Point(pt))
+                    cross=convexcells[cindex+count].intersection(cut)
+                    if(len(cross)==2):
+                        cell1,cell2=splitpolygon(convexcells[cindex+count],cut)
+                        if(len(pts)==1):
+                            if not((findoptimalangle(cell1)==0) and (findoptimalangle(cell2)==0)):
+                                convexcells.remove(convexcells[cindex+count])
+                                convexcells.insert(cindex+count,cell2)
+                                convexcells.insert(cindex+count,cell1) 
+                                width=np.insert(width,cindex+count,width[cindex+count])
+                                height=np.insert(height,cindex+count,height[cindex+count]) 
+                                count=count+1
+                        else:
+                            if(i>0):
+                                cell0=convexcells[cindex+count-1]
+                                seg=cell1.intersection(cell0)
+                                if(len(seg)):
+                                    if(isinstance(seg[0],Segment)):
+                                        if ((findoptimalangle(cell1)==0) and (findoptimalangle(cell0)==0)):                        
+                                            index1=findpoint(cell1.vertices,seg[0].p1)
+                                            index0=findpoint(cell0.vertices,seg[0].p2)
+                                            if not (index1==-1 or index0==-1):
+                                                mergedcell=mergecell(cell0,cell1,index0,index1)
+                                                convexcells.remove(convexcells[cindex+count-1])
+                                                convexcells.insert(cindex+count-1,mergedcell)
+                                                convexcells.remove(convexcells[cindex+count])
+                                                convexcells.insert(cindex+count,cell2)                                           
+                                                continue
                             convexcells.remove(convexcells[cindex+count])
                             convexcells.insert(cindex+count,cell2)
                             convexcells.insert(cindex+count,cell1) 
                             width=np.insert(width,cindex+count,width[cindex+count])
                             height=np.insert(height,cindex+count,height[cindex+count]) 
                             count=count+1
-                    else:
-                        if(i>0):
-                            cell0=convexcells[cindex+count-1]
-                            seg=cell1.intersection(cell0)
-                            if(len(seg)):
-                                if(isinstance(seg[0],Segment)):
-                                    if ((findoptimalangle(cell1)==0) and (findoptimalangle(cell0)==0)):                        
-                                        index1=findpoint(cell1.vertices,seg[0].p1)
-                                        index0=findpoint(cell0.vertices,seg[0].p2)
-                                        if not (index1==-1 or index0==-1):
-                                            mergedcell=mergecell(cell0,cell1,index0,index1)
-                                            convexcells.remove(convexcells[cindex+count-1])
-                                            convexcells.insert(cindex+count-1,mergedcell)
-                                            convexcells.remove(convexcells[cindex+count])
-                                            convexcells.insert(cindex+count,cell2)                                           
-                                            continue
+                    elif(len(cross)==3):
+                        seg1=Segment(cross[0],cross[1])
+                        cell1,cell2=splitpolygon(convexcells[cindex+count],seg1)    
                         convexcells.remove(convexcells[cindex+count])
                         convexcells.insert(cindex+count,cell2)
                         convexcells.insert(cindex+count,cell1) 
                         width=np.insert(width,cindex+count,width[cindex+count])
                         height=np.insert(height,cindex+count,height[cindex+count]) 
                         count=count+1
+                        seg2=Segment(cross[1],cross[2])
+                        cell1,cell2=splitpolygon(convexcells[cindex+count],seg2)    
+                        convexcells.remove(convexcells[cindex+count])
+                        convexcells.insert(cindex+count,cell2)
+                        convexcells.insert(cindex+count,cell1)  
+                        width=np.insert(width,cindex+count,width[cindex+count])
+                        height=np.insert(height,cindex+count,height[cindex+count]) 
+                        count=count+1
+        else:
+            for pt in pts:
+                cut=yaxis.parallel_line(Point(pt))
+                cross=convexcells[cindex+count].intersection(cut)
+                if(len(cross)==2):
+                    cell1,cell2=splitpolygon(convexcells[cindex+count],cut)    
+                    convexcells.remove(convexcells[cindex+count])
+                    convexcells.insert(cindex+count,cell2)
+                    convexcells.insert(cindex+count,cell1) 
+                    width=np.insert(width,cindex+count,width[cindex+count])
+                    height=np.insert(height,cindex+count,height[cindex+count]) 
+                    count=count+1                         
                 elif(len(cross)==3):
                     seg1=Segment(cross[0],cross[1])
                     cell1,cell2=splitpolygon(convexcells[cindex+count],seg1)    
