@@ -28,54 +28,6 @@ from sympy import Point, Line, Polygon,Segment
 import gurobipy as grb
 import time
 
-#check if the input boundary points define one polygon without crossline
-def checkcrossline(polygon):
-    sides=polygon.sides
-    count=0
-    for i in range(len(sides)-1):
-        for j in range(i+1,len(sides)):
-            if(len(sides[i].intersection(sides[j]))==1):
-                count=count+1
-    if(count==len(polygon.vertices)):
-        return False
-    else:
-        return True
-    
-#rearrange boundary points so that they define a polygon without crossing lines
-#return boundary points in correct sequence
-def formpolygon(coord):
-    num=len(coord)
-    coord=coord[np.lexsort((coord[:,1],coord[:,0]))]
-    vertex=np.zeros((0,2))
-    vertex=np.append(vertex,coord[0].reshape(1,2),axis=0)
-    vertex=np.append(vertex,coord[num-1].reshape(1,2),axis=0)
-    for i in range(1,num-1):
-        split=(coord[i][0]-coord[0][0])/(coord[num-1][0]-coord[0][0])*(coord[num-1][1]-coord[0][1])+coord[0][1]
-        if(coord[i][1]>split):
-            up=True
-        else:
-            up=False
-        if(up):
-            j=0
-            while(j<len(vertex)):
-                if(vertex[j][0]<=coord[i][0]):
-                    j=j+1
-                else:
-                    vertex=np.insert(vertex, j, values=coord[i], axis=0)
-                    break
-            if(j==len(vertex)):
-                vertex=np.insert(vertex, j-1 , values=coord[i], axis=0)
-        else:
-            j=np.argwhere(vertex[:,0]==coord[num-1][0])[0][0]
-            while(j<len(vertex)):
-                if(vertex[j][0]>=coord[i][0]):
-                    j=j+1
-                else:
-                    vertex=np.insert(vertex, j, values=coord[i], axis=0)
-                    break
-            if(j==len(vertex)):
-                vertex=np.append(vertex, coord[i].reshape(1,2), axis=0)
-    return vertex
 
 #find all Points that equals to the target
 #return -1 for none, single point or a list of points
@@ -200,6 +152,7 @@ def minuspolygon(polygon,obs,pt):
     verticesp[indexp:indexp]=iter(verticeso[indexo:len(verticeso)])
     polygon=Polygon(*verticesp)
     return polygon
+#merge two adjacent cells
 def mergecell(cell0,cell1,index0,index1):
     vertice0=cell0.vertices
     vertice1=cell1.vertices
@@ -212,9 +165,11 @@ def mergecell(cell0,cell1,index0,index1):
     else:
         vertice+=vertice1[index1:len(cell1.vertices)]+vertice1[0:index1-1]
     return Polygon(*vertice)
+
 def addtoTSPmodel(newcell,nodes):
     node=newcell.centroid
     nodes.append([node.x,node.y])
+    
 def solveTSPLP(points):
     # Create variables
     m = grb.Model()
@@ -234,9 +189,11 @@ def solveTSPLP(points):
     m.params.LazyConstraints = 1
     m.optimize(TSPsubtourelim)
     return m
+
 def TSPdistance(point1,point2):
     distance=math.sqrt(pow(point1[0]-point2[0],2)+pow(point1[1]-point2[1],2))
     return distance
+
 def TSPsubtourelim(model, where):
   if where == grb.GRB.callback.MIPSOL:
     selected = []
@@ -254,7 +211,6 @@ def TSPsubtourelim(model, where):
           expr += model._vars[tour[i], tour[j]]
       model.cbLazy(expr <= len(tour)-1)
 
-# Given a list of edges, finds the shortest subtour     
 def TSPsubtour(edges):
   visited = [False]*num
   cycles = []
@@ -853,25 +809,9 @@ def plotline(ax,rwaypoints):
     point=pointtoarray(rwaypoints) 
     ax.plot(point[:,0],point[:,1],linewidth=1,color='g')
 
-'''
-bnum=int(input("Enter the number of boundary points:"))
-bptlist=[]
-for i in range(bnum):
-    longitude_in=float(input("Enter boundry longitude:"))
-    latitude_in=float(input("Enter boundry latitude:"))
-    bpt=(longitude_in, latitude_in)
-    bptlist.append(bpt)
-bpoints=map(Point,bptlist)
-boundary=Polygon(*bpoints)
-#check if inputs form a polygon
-if(checkcrossline(boundary)):
-    bptarray=np.array(bptlist)    
-    verticearray=formpolygon(bptarray)
-    verticelist=verticearray.tolist()
-    boundary=Polygon(*verticelist)
-    if not (boundary.is_convex()):
-        print "please make sure input points are in correct sequence"
-'''
+#the following are some test samples, consisting of boundary part and obstacle part. 
+#Input coordinates are in counterclockwise
+#boundary part
 '''
 #sample1
 boundary=Polygon((0,0),(4,0),(4,4),(0,4)) 
@@ -919,11 +859,11 @@ boundary=Polygon(*boundary)
 #simplified Lake Mascoma
 boundary=Polygon((0,1),(4,0),(6.5,0.5),(8,1.8),(4.6,3.5),(3,3),(2.8,1),(1,1.5))
 '''
-#obsnum=int(input("Enter the number of boundary points:"))
-obstacles=[]
-allinnerpt=[]
-obsleft=[]
-obsright=[]
+#obstacle part
+obstacles=[]#store all obstacles(deeper areas) as polygons
+allinnerpt=[]#store all coordinates([x,y]) of obstacles and deeper areas
+obsleft=[]#store all leftmost position of obstacles and deeper areas
+obsright=[]#store all rightmost position of obstacles and deeper areas
 
 '''
 #sample1,2
@@ -1034,31 +974,18 @@ obsleft=[3.5,3.8]
 obsright=[5,4.6]
 iscell=[True,False]
 '''
-'''
-for i in range(obsnum):
 
-    num=int(input( "Enter the number of No %d obstacle points:" %(i+1)))
-    left=float('inf')
-    right=float('-inf')
-    temp=[]
-    for j in range(num):
-        obsx=float(input("Enter boundry longitude:"))
-        obsy=float(input("Enter boundry latitude:"))
-        if(obsx<left):
-            left=obsx
-        if(obsx>right):
-            right=obsx
-        temp.append([obsx,obsy])
-        allinnerpt.append([obsx,obsy])
-    temppolygon=Polygon(*temp)
-    if(temppolygon.area<0):
-        vertices=temppolygon.vertices
-        vertices.reverse()
-        temppolygon=Polygon(*vertices)
-    obstacles.append(temppolygon)
-    obsleft.append(left)
-    obsright.append(right)
-'''
+#user settings
+postmerge=True
+smartstart=True
+width1=16.8
+height1=12.5
+width2=84
+height2=62.5
+velocity=1
+turnpanalty=10
+
+#algorithm begins
 starttime=time.time()
 allinnerpt=np.array(allinnerpt)
 allinnerpt=allinnerpt[np.lexsort((allinnerpt[:,1],allinnerpt[:,0]))]
@@ -1069,8 +996,6 @@ cells=[]
 vpoints=[]
 innercost=[]
 pathindex=[]
-postmerge=True
-smartstart=True
 #area decomposition
 for pt in allinnerpt:
     isleft=False
@@ -1152,14 +1077,15 @@ for pt in allinnerpt:
             
 
 cells.append(remain)
-width=np.ones(len(cells))*16.8
-height=np.ones(len(cells))*12.5
-#add deeper area
+width=np.ones(len(cells))*width1
+height=np.ones(len(cells))*height1
+#add deeper areas
 for i in range(obsnum):
     if(iscell[i]):
         cells.append(obstacles[i])
-        width=np.append(width,84)
-        height=np.append(height,62.5)
+        width=np.append(width,width2)
+        height=np.append(height,height2)
+
 #split concave cell into convex cells 
 cindex=0
 count=0 
@@ -1282,21 +1208,18 @@ for cell in cells:
                     height=np.insert(height,cindex+count,height[cindex+count]) 
                     count=count+1
     cindex=cindex+1
-
-i=0
-velocity=1
-turnpanalty=10
-
-
+#get TSP solution as MIP start
 if(smartstart): 
     nodes=[]
     for cell in convexcells:
         addtoTSPmodel(cell,nodes)   
     num=len(nodes)
-    tspmodel=solveTSPLP(nodes)    
-    #get all possible coverage path inside each cell
-    #compute data required by the LP model
+    tspmodel=solveTSPLP(nodes)  
+    
+#get all possible coverage path inside each cell
+#compute data required by the LP model
 allpossiblepath=[]
+i=0
 for cell in convexcells:
     path=possiblepath(cell,width[i],height[i])
     allpossiblepath.append(path)
@@ -1307,6 +1230,7 @@ vnum=[]
 for i in vpoints:
     totalnum=totalnum+len(i)
     vnum.append(len(i))
+
 #solve model
 if(smartstart):
     startvar=tspmodel._vars
@@ -1315,6 +1239,7 @@ else:
     m=solveLP(vpoints,None)
 
 printsolution(m,m._vars)
+
 #generate whole path
 waypoints=[]
 for i in range(4):
