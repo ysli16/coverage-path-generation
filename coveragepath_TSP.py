@@ -308,8 +308,10 @@ def createallwaypoint(rboundary,inputwidth,height):
     bounds=rboundary.bounds
     cutnum=float(math.ceil(round((round(bounds[2],6)-round(bounds[0],6))/inputwidth,6)))
     width=(round(bounds[2],6)-round(bounds[0],6))/cutnum 
-    cutpos=np.arange(bounds[0]+width,bounds[2]+width,width)
-    pointpos=np.arange(bounds[0]+width/2,bounds[2]+width/2,width)
+    cutpos=np.arange(bounds[0]+width,bounds[2]+width,width).astype(np.double)
+    cutpos=np.around(cutpos,6)
+    pointpos=np.arange(bounds[0]+width/2,bounds[2]+width/2,width).astype(np.double)
+    pointpos=np.around(pointpos,6)
     cutlines=formperpenicularlines(cutpos)
     #form sub-polygons by cutlines
     subpolygons=[]
@@ -657,6 +659,7 @@ def plotline(ax,rwaypoints):
 
 #the following are some test samples, consisting of boundary part and obstacle part. 
 #Input coordinates are in counterclockwise
+#ratio is the scale between map and actual distance
 #boundary part
 '''
 #sample1
@@ -707,7 +710,7 @@ boundary=Polygon(*boundary)
 boundary=Polygon((0,1),(4,0),(6.5,0.5),(8,1.8),(4.6,3.5),(3,3),(2.8,1),(1,1.5))
 '''
 #obstacle part
-obstacles=[]#store all obstacles(deeper areas) as polygons
+obstacles=[]#store all obstacles(and deeper areas) as polygons
 allinnerpt=[]#store all coordinates([x,y]) of obstacles and deeper areas
 obsleft=[]#store all leftmost position of obstacles and deeper areas
 obsright=[]#store all rightmost position of obstacles and deeper areas
@@ -1069,7 +1072,7 @@ printsolution(m,m._vars)
 waypoints=[]
 current=0
 visited=[current]
-cellwaypoint=singlearearoute(convexcells[current],width[0],height[0],nodes[current],nodes[current])
+cellwaypoint=singlearearoute(convexcells[current],width[current],height[current],nodes[current],nodes[current])
 waypoints.extend(cellwaypoint)
 while(len(visited)<len(convexcells)):      
     nextvar=findnext(m._vars,visited,current)
@@ -1101,7 +1104,7 @@ waypoints.append(waypoints[0])
 totaltime=timeconsume(waypoints,waypoints[0],waypoints[-1])
 turnnum=len(waypoints)-1
 
-print "totaltime: %f" %totaltime
-print "number of turn:%f" %turnnum
-print "runtime: %f s" %computetime
+print "distance: %f" %(totaltime-turnnum*turnpanalty)
+print "number of turns:%f" %turnnum
+print "algorithm runtime: %f s" %computetime
 #fig.savefig('TSPnoadaptive_final.svg', format='svg', dpi=1200)

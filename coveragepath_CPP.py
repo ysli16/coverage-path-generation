@@ -301,8 +301,10 @@ def createallwaypoint(rboundary,inputwidth,height):
     bounds=rboundary.bounds
     cutnum=float(math.ceil(round((round(bounds[2],6)-round(bounds[0],6))/inputwidth,6)))
     width=(round(bounds[2],6)-round(bounds[0],6))/cutnum 
-    cutpos=np.arange(bounds[0]+width,bounds[2]+width,width)
-    pointpos=np.arange(bounds[0]+width/2,bounds[2]+width/2,width)
+    cutpos=np.arange(bounds[0]+width,bounds[2]+width,width).astype(np.double)
+    cutpos=np.around(cutpos,6)
+    pointpos=np.arange(bounds[0]+width/2,bounds[2]+width/2,width).astype(np.double)
+    pointpos=np.around(pointpos,6)
     cutlines=formperpenicularlines(cutpos)
     #form sub-polygons cut by cutlines
     subpolygons=[]
@@ -1178,7 +1180,7 @@ waypoints.append(waypoints[0])
 totaltime=timeconsume(waypoints,waypoints[0])
 turnnum=len(waypoints)-1
 
-print "totaltime: %f" %totaltime
-print "number of turn:%f" %turnnum
-print "runtime: %f s" %computetime
+print "distance: %f" %(totaltime-turnnum*turnpanalty)
+print "number of turns:%f" %turnnum
+print "algorithm runtime: %f s" %computetime
 fig.savefig('CPPadaptive_final.svg', format='svg', dpi=1200)
